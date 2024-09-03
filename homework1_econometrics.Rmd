@@ -1,0 +1,290 @@
+---
+title: "HOMEWORK 1"
+author: "Alessandro Ricchiuti"
+date: "2023-03-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r include=FALSE}
+set.seed(615003)
+
+library(dplyr)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+library(bucky)
+```
+
+## Answer 1
+```{r}
+n<-200
+x<- rnorm(n, mean=0,sd=1) 
+u<- rchisq(n, 3) -3
+```
+x is a sample from a standard normal distribution
+
+u is a sample from a chi square with 3 degrees of freedom minus 3
+
+
+by checking the independence of x and u we can use the correlation
+```{r}
+(cor(x,u))
+```
+the variables are slightly correlated, even if by construction theoretically they are independent
+
+the variable y is a linear transformation of the two previous variables
+```{r}
+y= 0.5 + 0.3* x + u
+```
+
+
+
+## Answer 2
+
+Estimation of Beta hat by OLS method
+```{r}
+(Beta2_hat <-cov(y,x)/var(x))
+(Beta1_hat <- mean(y) - Beta2_hat*mean(x))
+
+```
+the estimated coefficients differ from the one in the structural model.
+
+the Beta hat vector can be found in matrix term as well
+
+Beta= (X'X)^-1 X'Y
+```{r}
+X <- matrix(c(rep(1, 200), x), ncol = 2, byrow = FALSE)
+Y<- y
+(Beta <- (solve(t(X)%*%X))%*%t(X)%*%Y)
+
+```
+the results are compatible with the previous estimation
+
+```{r pressure, echo=FALSE}
+plot(x, y,
+     col="blue", ylab="Y",
+     xlab = "X",
+     main="Distribution", 
+     abline(lm(y ~ x), col = "red")
+     ) 
+```
+
+the plot shows how the OLS interpolate data. The distribution of y seems homoskedastic
+
+## Answer 3
+
+estimation of the asymptotical variance under the assumption of homoskedasticity
+
+V= σ^2 (X'X)^-1, where σ^2 is the variance of the error term
+```{r}
+U_hat <- y - Beta1_hat - Beta2_hat * x
+sum_u_hat_square <- sum(U_hat^2)/(n - 2)
+(var_Beta2_hat_homo <- sum_u_hat_square / sum((x - mean(x))^2))
+
+```
+
+estimation of the asymptotical variance under the assumption of heteroskedasticity
+
+V= E(X'X)^-1 E(u^2 X'X) E(X'X)^-1
+```{r}
+U_hat <- y - Beta1_hat - Beta2_hat * x
+(var_Beta2_hat <- sum(U_hat^2 * x^2) / ((sum(x^2) - sum(x)^2 / n)^2))
+
+```
+Since the two variances are different, apparently the model is heteroskedastic, even if the difference is slight
+
+
+
+- Another way to compute the asymptotical variance
+
+homosk.
+```{r}
+u_hat <- y - Beta1_hat - Beta2_hat * x
+variance <- sum(u_hat*u_hat)/(n-2)
+(varmatr <- solve(t(X)%*%X)*variance)
+varmatr[2,2]
+```
+
+heterosk.
+```{r}
+library(sandwich)
+inverse <- solve(t(X)%*%X)
+err2xx <- t(X)%*%diag(as.vector(u_hat^2))%*%X 
+(var_h<-inverse%*%err2xx%*%inverse)
+var_h[2,2]
+```
+
+## Answer 4
+
+- check of the point 2
+```{r}
+data <- data.frame(y, x, u)
+OLS <- lm(y ~ x, data= data)
+(coeftest(OLS, vcov = vcovHC))
+```
+by using the R command, the coefficients are the same of the previous computation
+
+
+- check of the point 3
+
+variance-covariance matrix for both the heteroskedastic model and the homoskedastic one
+```{r}
+(v1<-vcov(OLS))
+
+```
+```{r}
+(v2<-vcovHC(OLS, type = "HC0"))
+
+```
+
+
+
+Comparison of the variance founded and the vcov result
+
+homosk.
+```{r}
+stargazer(var_Beta2_hat_homo,v1[2,2],
+          header=FALSE, type="text")
+```
+
+heterosked.
+```{r}
+stargazer(var_Beta2_hat,v2[2,2],
+          header=FALSE, type="text")
+```
+
+
+## Answer 5
+
+Confidence interval with 200 observations (homoskedastic)
+```{r}
+(CI_200<- coefci(OLS))
+
+```
+
+by computing the interval without the R command
+```{r}
+OLS_summary <-summary(OLS)
+
+c("lower" = OLS_summary$coef[2,1] - qt(0.975, df = OLS_summary$df[2]) * OLS_summary$coef[2, 2],
+  "upper" = OLS_summary$coef[2,1] + qt(0.975, df = OLS_summary$df[2]) * OLS_summary$coef[2, 2])
+
+```
+note that the T statistics is distributed as a t-student with n-2 degrees of freedom
+
+
+
+Confidence interval with 200 observations (heteroskedastic)
+```{r}
+(CI_200_h<-coefci(OLS, vcov = vcovHC,type = "HC0"))
+
+```
+or by hand
+```{r}
+OLS_R <- robust.summary(OLS, vcov = vcovHC, type = "HC0")
+OLS_R$coefficients
+c("lower" = OLS_R$coef[2,1] - qt(0.975, df = OLS_R$df[2]) * OLS_R$coef[2, 2],
+  "upper" = OLS_R$coef[2,1] + qt(0.975, df = OLS_R$df[2]) * OLS_R$coef[2, 2])
+
+```
+
+
+
+
+Confidence interval with 400 observations
+
+construction of the samples with 400 observations
+```{r}
+n2<- 400
+x2<- rnorm(n2, mean=0,sd=1) 
+u2<- rchisq(n2, 3) -3 
+y2= 0.5 + 0.3* x2 + u2
+newdata <- data.frame(y2, x2, u2)
+OLS2<- lm(y2 ~ x2, data= newdata)
+```
+
+confidence interval with 400 observations (homoskedastic)
+```{r}
+(CI_400<- coefci(OLS2))
+
+```
+
+confidence interval with 400 observations (heteroskedastic)
+```{r}
+(CI_400_h<-coefci(OLS2, vcov = vcovHC,type = "HC0"))
+
+```
+
+
+- Comparison between 200 obs. and 400 obs. 
+
+homoskedastic
+```{r}
+stargazer(CI_200[2,],CI_400[2,],
+          header=FALSE, type="text",column.labels=c("CI_200","CI_400"))
+```
+
+heteroskedastic
+```{r}
+stargazer(CI_200_h[2,],CI_400_h[2,],
+          header=FALSE, type="text",column.labels=c("CI_200","CI_400"))
+```
+in both the cases the larger is the sample size, the smaller is the interval. By CTL with n that goes to infinity, the beta hat is distributed as a normal with mean the real beta and variance the variance of beta over n. So by increasing the sample size the variance is reduced (and consequently the standard deviation), so the interval becomes smaller.
+
+
+
+## Answer 6
+
+a)
+the OLS for Beta 1 hat is unbiased: E[u|X]=E[E[u|X]|X]=E[u] because of the independence of x and u and E[u]=0 since the expected value of a chi square with 3 degrees of freedom is 3, then -3 it is 0. Therefore E[u|X]=0 
+
+b) 
+Beta 2 hat is unbiased. the demonstration follows from the previous.
+
+c)
+the conditional variance of the error term Var (u|x) is equal to the variance of the error term since u and x are independent, so it is homoskedastic
+
+d) 
+Beta 2 estimates the partial effect because the model is linear and the X is linear. dE(yi|xi)/dxi=B2
+
+
+## Answer 7
+
+by coding
+```{r}
+epsilon <- rchisq(n, 3) -3
+u_7<- sqrt(x)* epsilon
+y_7= 0.5 + 0.3* x + u_7
+
+data <- data.frame(u, x, epsilon)
+
+```
+NA are present since x can be negative and u is made by the square root of it
+
+
+
+Beta1 hat is still unbiased because E[√x*ε|x]=√xE[ε|x].
+Since ε and x are independent, E[ε|x]=0 and  therefore   E[√x*ε|x]=0 
+
+Beta2 hat is still unbiased and the demonstration follows from the previous
+
+u and x are not independent so the model is heteroskedastic
+
+the coefficient  estimate the partial effect since still dE(yi|xi)/dxi=B2
+
+```{r , echo=FALSE}
+plot(x, y_7,
+     col="blue", ylab="Y new",
+     xlab = "X",
+     main="Distribution", 
+     abline(lm(y_7 ~ x), col = "red")
+     ) 
+```
+
+in this case the distribution seems heteroskedastic     
+

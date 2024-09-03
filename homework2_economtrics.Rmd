@@ -1,0 +1,425 @@
+---
+title: "Homework 2 - Advanced Econometrics"
+author: "Alessandro Ricchiuti"
+date: "2023-04-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+rm(list=ls())
+library(sandwich)
+library(lmtest)
+library(dplyr)
+library(stargazer)
+library(bucky)
+```
+
+
+Question 1
+
+
+
+Consider the following linear model
+yi = β1 + β2x2i + ... + βkxki + εi = xiβ + εi
+where εi = γ1 + γ2qix2i + ui, qi is an unobservable variable, E(ui|xi, qi) = 0 and E(ui^2|xi) = σ^2.
+
+1.a) 
+
+yi = Xiβ + εi= Xiβ +γ1 + γ2qix2i + ui 
+
+yi= (β1  +γ1) + x2i (β2 + γ2qi) + ... + βk xki+ ui
+
+PE= dE(yi|xi, qi)/dx2i= β2 +  γ2 qi
+
+APE= E[β2 +  γ2 qi]= β2+  γ2 E(qi)
+
+1.b)
+
+E[εi|xi, qi] = E[ γ1 + γ2qix2i + ui|xi, qi]=  γ1+ γ2 E[x2i qi|xi, qi ]  +E[ ui|xi, qi]=  γ1, since  γ2= 0 and E[ ui|xi, qi]=0
+
+The conditional expected value of the error term does not depend on x so the OLS is unbiased for x2i. Since unbiasedness is verified, consistency follows
+
+the intercept is biased since E[εi|xi, qi] is a constant
+
+when   γ2=0 the regression becomes  yi= (β1 + γ1) + β2 x2i + ... + βk xki+ ui
+and 
+
+PE= dE(yi|xi, qi)/dx2i= β2
+
+APE= E[β2 +  γ2 qi]= β2
+
+1.c)
+
+The model becomes 
+
+yi = (β1 + γ1) + (β2γ2qi)x2i + ... + βkxki + ui
+
+And by applying the conditional expectation 
+
+E[yi|xi, qi] = (β1+γ1)+(β2γ2E[qi|xi])x2i+...+βkxki+ui = (β1+γ1)+(β2γ2k)x2i+...+βkxki
+
+As regards unbiasedness:
+
+E[εi|xi, qi]= E[ γ1 + γ2qix2i + ui|xi, qi]=  γ1+ γ2 E[x2i qi|xi, qi ]= γ1+ γ2 x2i E[qi|x] = γ1+ γ2 x2 k 
+
+since E[εi|xi, qi] depends on x the PE is biased
+
+
+E[εi xi] = E[ γ1 xi +  γ2 qi xi x2i + ui xi]=  γ1  E[ xi] +  γ2 E[qi xi x2i], since E[ ui xi]= 0.
+It is different from 0 so the PE is not consistent for x2
+
+but the APE is consistent since
+
+cov(xi,  γ2 x2i (qi- 𝜇q) + ui ) = 0 . It is verified since E(xi ( γ2 x2i (qi − 𝜇q) +ui)) = 0 that is true if  E(qi − 𝜇q|xi) = 0 that works when E[qi|xi]=k
+
+1.d)
+
+from 1.c)  we know that E[εi|xi, qi] = γ1+ γ2 x2 k . if k=0 the conditional expectation becomes E[εi|xi, qi] = γ1, that is constant so the PE is unbiased and consequently consistent for x2
+
+
+1.e) 
+
+E[εi|xi, qi] = E[ γ1 + γ2qix2i + ui|xi, qi] =  γ1+  γ2 x2i  E[qi|x]+ E[ ui|xi, qi] =  γ1+  γ2 x2i  E[qi|x]+ f(x)
+
+By modifying all the previous points with the new assumptions we have that E[εi|xi, qi] always depends on x, so the OLS is always biased for x2
+
+As regards consistency 
+
+b) E[εi xi]=  E[ γ1 xi +  ui xi]=0 + 0 = 0 so it is consistent
+
+c) the solution will not change since remains inconsistent but consistent for the APE
+
+d) E[εi xi]= E[ (γ1+  γ2 x2 k +ui) xi ]=  E[ (γ1+ui) xi]= E[ γ1 xi +  ui xi]=0 + 0 = 0 so it is consistent 
+
+
+
+
+Question 2 
+
+2A)
+```{r}
+set.seed(660000)  
+n <- 100      
+R <- 5000    
+
+Beta_1_hat <- numeric(R)
+Beta_2_hat <- numeric(R)
+
+var_Beta1<- numeric(R)
+var_Beta2<- numeric(R)
+
+for (j in 1:R) {
+ 
+  u <- rnorm(n)
+  x <- rnorm(n)
+  y<- 1 + x + u
+  
+  OLS<-lm(y~x)
+  Beta_1_hat  [j] <- OLS$coefficients[1]
+  Beta_2_hat [j] <- OLS$coefficients[2]
+  var_Beta1[j]<-(summary(OLS)$coefficients[1,2])^2
+  var_Beta2[j]<-(summary(OLS)$coefficients[2,2])^2
+}
+
+```
+the for loop extract R times X and U, both standard normal distribution with sample size 100, create the related y and find the estimated coefficients and the variances.
+
+To prove the normality of the distribution of the estimated coefficients I standardize the RV and find the relevant moments, showing they are coherent with the moments of the standard normal distribution
+
+let's start with beta 2 hat
+
+```{r}
+beta2<- (Beta_2_hat-mean(Beta_2_hat))/sqrt(var(Beta_2_hat))
+```
+```{r}
+(mean(beta2))
+(var(beta2))
+```
+by checking the mean and the variace the RV seems standardized
+
+```{r}
+(a<-mean(beta2^0))
+```
+for the normal is 1
+```{r}
+(b<-mean(beta2^1))
+```
+for the normal is 0 and here is very close
+```{r}
+(c<-mean(beta2^2))
+```
+for the normal is 1 and here is very close
+```{r}
+(d<-mean(beta2^3))
+```
+for the normal is 0 and here is very close
+```{r}
+(e<-mean(beta2^4))
+```
+for the normal is 3 and here is very close
+
+And the same with beta 1 hat 
+```{r}
+beta1<- (Beta_1_hat-mean(Beta_1_hat))/sqrt(var(Beta_1_hat))
+```
+
+```{r}
+(f<-mean(beta1^0))
+```
+for the normal is 1
+```{r}
+(g<-mean(beta1^1))
+```
+for the normal is 0 and here is very close
+```{r}
+(h<-mean(beta1^2))
+```
+for the normal is 1 and here is very close
+```{r}
+(i<-mean(beta1^3))
+```
+for the normal is 0 and here is very close
+```{r}
+(l<-mean(beta1^4))
+```
+for the normal is 3 and here is very close
+
+
+we can just change the sample size (now equal to 250) and repeat the procedure and then compare the results
+```{r}
+n <- 250      
+R <- 5000    
+
+Beta_1_hat <- numeric(R)
+Beta_2_hat <- numeric(R)
+
+var_Beta1<- numeric(R)
+var_Beta2<- numeric(R)
+
+for (j in 1:R) {
+ 
+  u <- rnorm(n)
+  x <- rnorm(n)
+  y<- 1 + x + u
+  
+  OLS<-lm(y~x)
+  Beta_1_hat  [j] <- OLS$coefficients[1]
+  Beta_2_hat [j] <- OLS$coefficients[2]
+  var_Beta1[j]<-(summary(OLS)$coefficients[1,2])^2
+  var_Beta2[j]<-(summary(OLS)$coefficients[2,2])^2
+}
+
+beta2<- (Beta_2_hat-mean(Beta_2_hat))/sqrt(var(Beta_2_hat))
+beta1<- (Beta_1_hat-mean(Beta_1_hat))/sqrt(var(Beta_1_hat))
+
+(a2<-mean(beta2^0))
+(b2<-mean(beta2^1))
+(c2<-mean(beta2^2))
+(d2<-mean(beta2^3))
+(e2<-mean(beta2^4))
+(f2<-mean(beta1^0))
+(g2<-mean(beta1^1))
+(h2<-mean(beta1^2))
+(i2<-mean(beta1^3))
+(l2<-mean(beta1^4))
+```
+
+Now compare the results
+
+For beta 2
+```{r}
+M<-matrix(c(a,a2,b,b2,c,c2,d,d2,e,e2), 
+       nrow = 2, 
+       ncol = 5)
+colnames(M) <- c("M_0", "M_1", "M_2","M_3","M_4")
+rownames(M) <- c("100", "250")
+M
+```
+In both the cases the sample size is large enough to proximate a standard normal distribution. For n=250 the approximation seems slightly better.
+
+
+For beta 1 
+```{r}
+M1<-matrix(c(f,f2,g,g2,h,h2,i,i2,l,l2), 
+       nrow = 2, 
+       ncol = 5)
+colnames(M1) <- c("M_0", "M_1", "M_2","M_3","M_4")
+rownames(M1) <- c("100", "250")
+M1
+```
+In this case the kurtosis is quite 3 as in the standard normal.
+
+2B
+
+Change the distributions 
+
+```{r}
+set.seed(660000)  
+n <- 100      
+R <- 5000    
+
+Beta_1_hat <- numeric(R)
+Beta_2_hat <- numeric(R)
+
+var_Beta1<- numeric(R)
+var_Beta2<- numeric(R)
+
+for (j in 1:R) {
+ 
+  u <- (rchisq(n, 3) -3)/sqrt(6)
+  x <- rnorm(n)
+  y<- 1 + x + u
+  
+  OLS<-lm(y~x)
+  Beta_1_hat  [j] <- OLS$coefficients[1]
+  Beta_2_hat [j] <- OLS$coefficients[2]
+  var_Beta1[j]<-(summary(OLS)$coefficients[1,2])^2
+  var_Beta2[j]<-(summary(OLS)$coefficients[2,2])^2
+}
+beta2<- (Beta_2_hat-mean(Beta_2_hat))/sqrt(var(Beta_2_hat))
+beta1<- (Beta_1_hat-mean(Beta_1_hat))/sqrt(var(Beta_1_hat))
+
+a_chi<-mean(beta2^0)
+b_chi<-mean(beta2^1)
+c_chi<-mean(beta2^2)
+d_chi<-mean(beta2^3)
+e_chi<-mean(beta2^4)
+f_chi<-mean(beta1^0)
+g_chi<-mean(beta1^1)
+h_chi<-mean(beta1^2)
+i_chi<-mean(beta1^3)
+l_chi<-mean(beta1^4)
+
+
+n <- 250      
+R <- 5000    
+
+Beta_1_hat <- numeric(R)
+Beta_2_hat <- numeric(R)
+
+var_Beta1<- numeric(R)
+var_Beta2<- numeric(R)
+
+for (j in 1:R) {
+ 
+  u <- (rchisq(n, 3) -3)/sqrt(6)
+  x <- rnorm(n)
+  y<- 1 + x + u
+  
+  OLS<-lm(y~x)
+  Beta_1_hat  [j] <- OLS$coefficients[1]
+  Beta_2_hat [j] <- OLS$coefficients[2]
+  var_Beta1[j]<-(summary(OLS)$coefficients[1,2])^2
+  var_Beta2[j]<-(summary(OLS)$coefficients[2,2])^2
+}
+beta2<- (Beta_2_hat-mean(Beta_2_hat))/sqrt(var(Beta_2_hat))
+beta1<- (Beta_1_hat-mean(Beta_1_hat))/sqrt(var(Beta_1_hat))
+
+a_chi_2<-mean(beta2^0)
+b_chi_2<-mean(beta2^1)
+c_chi_2<-mean(beta2^2)
+d_chi_2<-mean(beta2^3)
+e_chi_2<-mean(beta2^4)
+f_chi_2<-mean(beta1^0)
+g_chi_2<-mean(beta1^1)
+h_chi_2<-mean(beta1^2)
+i_chi_2<-mean(beta1^3)
+l_chi_2<-mean(beta1^4)
+```
+
+Now compare the results
+
+For beta 2
+```{r}
+M<-matrix(c(a_chi,a_chi_2,b_chi,b_chi_2,c_chi,c_chi_2,d_chi,d_chi_2,e_chi,e_chi_2), 
+       nrow = 2, 
+       ncol = 5)
+colnames(M) <- c("M_0", "M_1", "M_2","M_3","M_4")
+rownames(M) <- c("100", "250")
+M
+```
+The results are compatible in both the cases with the standard normal, meaning that even if we start from an error term distributed as a transformation of a chi square we are able to obtain a normal distribution.
+
+For beta 1 
+```{r}
+M1<-matrix(c(f_chi,f_chi_2,g_chi,g_chi_2,h_chi,h_chi_2,i_chi,i_chi_2,l_chi,l_chi_2), 
+       nrow = 2, 
+       ncol = 5)
+colnames(M1) <- c("M_0", "M_1", "M_2","M_3","M_4")
+rownames(M1) <- c("100", "250")
+M1
+```
+for beta 1 we can say the same of the previous point
+
+2C
+```{r}
+n <- 250         
+R<- 5000
+
+Beta_1_hat_2 <- numeric(R)
+Beta_2_hat_2 <- numeric(R)
+
+
+var_Beta2_hat_homo<- numeric(R)
+var_Beta2_hat_hetero<- numeric(R)
+
+CI<-numeric(R)
+CIu<-numeric(R)
+CI_h<-numeric(R)
+CIu_h<-numeric(R)
+
+homo_CI_covered<-numeric(R)
+hetero_CI_covered<-numeric(R)
+
+for (j in 1:R) {
+  x <- rnorm(n)
+  u <- rnorm(n, mean=0, sd=sqrt(x^2))
+  y<- 1 + x + u
+  
+ OLS<-lm(y~x)
+ Beta_1_hat_2 [j] <- OLS$coefficients[1]
+ Beta_2_hat_2 [j] <- OLS$coefficients[2]
+
+ var_Beta2_hat_homo[j]<-(summary(OLS)$coefficients[2,2])^2
+ var_Beta2_hat_hetero[j]<-(robust.summary(OLS)$coefficients[2,2])^2
+
+
+ CI[j]<- summary(OLS)$coef[2,1]- qt(0.975, df = summary(OLS)$df[2]) * summary(OLS)$coef[2, 2]
+ CIu[j]<- summary(OLS)$coef[2,1]+ qt(0.975, df = summary(OLS)$df[2]) * summary(OLS)$coef[2, 2]
+
+ OLS_R <- robust.summary(OLS, vcov = vcovHC, type = "HC0")
+ 
+ CI_h[j]<- OLS_R$coef[2,1] - qt(0.975, df = OLS_R$df[2]) * OLS_R$coef[2, 2]
+ CIu_h[j]<- OLS_R$coef[2,1] + qt(0.975, df = OLS_R$df[2]) * OLS_R$coef[2, 2]
+ 
+beta2<-1
+homo_CI_covered[j] <- ifelse(beta2 >= CI[j] & beta2 <= CIu[j], 1, 0)
+hetero_CI_covered[j] <- ifelse(beta2 >= CI_h[j] & beta2 <= CIu_h[j], 1, 0)
+}
+```
+
+I obtained the extremes of the CI for he homoskedastic and for the heteroskedastic case.Then I created a dummy saying when the real value is contained.
+
+```{r}
+data_homo<-data.frame(lower=CI, upper=CIu )
+data_hetero<-data.frame(lower=CI_h, upper=CIu_h)
+
+(mean(homo_CI_covered))
+(mean(hetero_CI_covered))
+```
+ By considering the mean we find the probability the structural value is contained. In the heteroskadastic case the probability is much higher.
+
+We can also take the average interval in both the cases as an additional proof.
+```{r}
+(c(mean(CI),mean(CIu)))
+```
+
+```{r}
+(c(mean(CI_h),mean(CIu_h)))
+```
+in both the cases on average the structural value is held. The difference between the two cases is in the length of the interval. The heteroskedastic one is larger because the heteroskedastic variance is higher. 
+
