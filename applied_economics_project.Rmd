@@ -1,0 +1,421 @@
+---
+title: " The Effect of a Nudge on the Saving Rate"
+author: Francesco Bertonati, Riccardo Gallone, Maurizio Pisu, Alessandro Ricchiuti,
+  Emilio Zorzi
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+
+
+library(sandwich)
+library(corrplot)
+library(wooldridge)
+library(tidyverse)
+library(readxl)
+
+library(plm)
+library(AER)
+library(dplyr)
+library(stats)
+
+library(car)
+library(lmtest)
+library(stargazer)
+library(fastDummies)
+library(nnet)
+library(knitr)
+```
+
+```{r, include=FALSE}
+data = read_xlsx("C:\applied_economics_project_data.xlsx")
+data = dummy_cols(data, select_columns = "Parsimony", remove_first_dummy = FALSE)
+data = data %>% 
+  mutate(across(everything(), ~as.numeric(as.character(.))))
+attach(data)
+```
+
+\centering
+
+## Abstract
+
+\raggedright
+
+This study investigates the efficacy of nudges in affecting people's
+saving behaviors, with a specific focus on the saving rate. Through an
+experiment conducted via an online survey, we tested the impact of
+simple suggestion on individuals' saving choices. This research provides tangible evidence of the potential of
+nudges in promoting saving and suggests possible implications for the
+design of public policies and savings promotion tools.
+
+## Introduction
+Italy is currently facing significant demographic challenges, marked by a declining population and the increasing emigration of skilled talent. These phenomena exert considerable pressure on the welfare system, particularly concerning the sustainability of public pensions. In this context, individual saving becomes not only a virtuous practice but a necessity for future financial stability.
+
+Our research aims to investigate whether it is possible to affect saving habits without imposing choices using nudges and measure their effect on the saving rate. We believe that nudges can facilitate the selection of optimal choices, especially when inertia or a lack of information would otherwise lead to less advantageous decisions.
+
+Our hypothesis are based on a wide literature. We decided to select two articles that deal with the impact of
+treatment nudges on the retirement's choices of people in the US.
+
+The first one is \textit{The Importance of default options for retirement
+saving outcomes: evidence from US", by John Beshears, James J. Choi,
+David Laibson, Brigitte C. Madrian}. They discussed the impact of default
+option on different choices for the retirement plan throughout people's
+working life. The first choice is whether to participate or not to a
+retirement plan.
+
+![Partecipation to Savings
+Plan](C:\\Users\\pisud\\Desktop\\AppliedPCDavide\\AutomaticEnrollment.png)
+
+As showed in \textit{Figure 1}, after having the automatic enrollment as a
+default option, there is an increase in the participation to the plan.
+The second choice is about the percentage of income allocated to the
+plan. Originally, the default percentage was 3%, then it was changed to
+6%. \textit{Figure 2} shows that individuals tend to follow the default rule,
+both when it is set at 3% and when is set at 6%.
+
+![Contribution Rates](C:\\Users\\pisud\\Desktop\\AppliedPCDavide\\36percent.png)
+
+
+The second one is \textit{The Welfare Economics of Default Options in 401(k)
+Plans", by B. Douglas Bernheim, Andrey Fradkin, and Igor Popov}. It relies
+on an idealized controlled experiment about the effect of nudges on
+people's choices for their retirement plans. This experiment considers
+as its population of interest the U.S. Army service members, then it
+randomly assigns every person to one of ten groups. Nine groups will be
+"treated", i.e. they will receive an email that contains an invite to
+take part in a retirement plan. In 8 out of 9 groups, the mail will also
+be attached with a suggested percentage. The last group is, instead, the
+control group. Then, it is measured the impact of the informative email
+on the participation of US army servants to retirement plans, both in
+terms of whether they participate or not and in terms of the rate
+destined to the retirement plan. They find a significant effect of the
+nudge both on the choice to partecipate and the rate indicated.
+Moreover, they think that the effect was underestimated because it was
+not possible to know if people effectively read the e-mail that was sent
+to them (so there was no certainty of the presence of a treatment).
+
+## Experimental design
+
+In an idealized experiment the population of our interest is the
+universe of individuals. In this framework we would like to randomly
+select the individual of the population into two subgroups with equal
+size. The treatment consists in providing information/default choice to
+the treatment group and not providing these information to the control
+group. Then we would like to measure the average outcome in terms of the
+difference in absolute value between the default/suggested saving rate
+and the saving rate chosen by the individual in both groups. Then we
+would like to identify the effect of the nudge on the saving rate by
+comparing the average saving rate between the treatment and the control
+group.
+
+We expect that just by giving a nudge we are able to affect the behavior
+of individuals, without imposing constraints on the set of choices
+available. The sign of the effect will depend on the recommended saving
+rate and the average saving rate of the individuals. For example, in a
+country with a lower saving rate, the government could provide nudges to
+increase the saving rate while in a country with a high saving rate the
+government could provide a nudge to reduce the average saving rate.
+
+Since we do not have access to the idealized experiment, we built up an
+experiment as idealized as possible. We created two surveys (treatment
+and control survey) with 15 questions. Only in the treatment survey, in
+the question related to the choice of the saving rate, we provided
+information about the default/recommended saving rate. The choice of the
+suggested rate was arbitrary but reasonable (we decided to use an arbitrary
+rate instead of the optimal one in order to make the treatment exogenous, i.e.
+it can be that in calculation of the optimal rate it is taken into consideration
+the average or the desired rate of individuals). Then using monster
+allocation, we randomly share both surveys to the largest and well
+differentiated set of individuals using social networks. 
+
+We can exclude the underestimation bias that affect the article \textit{The Welfare Economics of Default Options in 401(k)
+Plans", by B. Douglas Bernheim, Andrey Fradkin, and Igor Popov} because of the simplicity and accessibility of the treatment
+(it did not required any further action, just read one more line).
+
+\newpage 
+
+# Data description
+The survey allowed us to collect information on:
+\begin{itemize}
+\item Gender and Age: they are predetermined variables, therefore good controls;
+\item Job: we think that a worker has a more concrete idea on savings rate than a student who have not an income;
+\item Place of living: cities are usually characterized by higher expenses than villages;
+\item House/Siblings and Vehicles: they give us a proxy for the wealth;
+\item Financial status: it is relevant since individuals with dependents are less able to save;
+\item Financial knowledge, Interest in Finance and Financial Markets participation: they are useful to understand the level of financial knowledge;
+\item Parsimony: it gives us information on the natural tendency of individuals to save. 
+
+\end{itemize}
+
+We collect 247 (126 Treated $\simeq 51\%$) observations from the survey.
+The independent variables are Gender, Age, Schooling, Job, City,
+Siblings, Financial.status, House, Vehicles, Share.costs
+Financial.Knowledge, Interested.in.Finance, Parsimony and
+Financial.Markets. We describe them in the table below. The dependent
+variable is the distance which is defined as the difference in absolute
+value between the suggested rate of savings (12.5) and the rate chosen
+by the individuals.
+
+<br><br>
+
+|     | $Gender$ | $Schooling$ | $Job$       | $City$  | $Siblings$ |
+|-----|----------|-------------|-------------|---------|------------|
+| 0   | Female   | Mid School  | Unemployed  | Village | Only Child |
+| 1   | Male     | High School | Student     | City    | One        |
+| 2   |          | Bachelor    | Stud-Worker |         | Two        |
+| 3   |          | MSC         | Worker      |         | Three      |
+| 4   |          | Master      | Other       |         | Other      |
+| 5   |          | PhD         |             |         |            |
+
+|     | $Financial Status$ | $House$       | $Vehicles$ | $Share Cost$ | $FinancialMarket$ |
+|------------|------------|------------|------------|------------|------------|
+| 0   | Be Dependent       | Zero          | Zero       | No           | No                |
+| 1   | Be Independet      | One           | One        | Yes          | Yes               |
+| 2   | Have Dependents    | More than one | Two        |              |                   |
+| 3   |                    |               | Three      |              |                   |
+| 4   |                    |               | Other      |              |                   |
+| 5   |                    |               |            |              |                   |
+
+```{=tex}
+\begin{itemize}
+\item \textbf{Age}: natural number [0, 99]  
+\item \textbf{Financial Knowledge}: ordinal number \{1, 2, 3, 4, 5\}  
+\item \textbf{Interest in Finance}: ordinal number \{1, 2, 3, 4, 5\}  
+\item \textbf{Parsimony}: ordinal number \{1, 2, 3, 4, 5\}
+\item \textbf{Rate}: Real number [0, 100] %
+\end{itemize}
+```
+<br><br>
+
+\newpage
+The following table summarizes the statistics of our sample:
+
+```{r echo=FALSE, warning=FALSE}
+statistics <- data %>%
+  group_by(Treatment) %>%
+  summarize(across(3:17, mean, na.rm = TRUE)) %>%
+  pivot_longer(cols = -Treatment, names_to = "Variable", values_to = "Mean") %>%
+  pivot_wider(names_from = Treatment, values_from = Mean)
+
+kable(statistics)
+```
+</center>
+
+```{r, results='asis', include=FALSE}
+
+col_removed = c("Date", "Suggested.Rate", "Parsimony_1", "Parsimony_2", "Parsimony_3", "Parsimony_4", "Parsimony_5", "Distance", "Treatment", "Rate")
+data_reduced = data[, !names(data) %in% col_removed]
+correlation_matrix = round(cor(data_reduced), 2)
+
+```
+
+```{r, include=TRUE}
+corrplot(correlation_matrix, method = "color")
+```
+
+The controls are not multicollinear, even if there is high correlation between Age and Financial status, Age and Job, Job and Financial.status. 
+
+
+
+\newpage
+
+### Balance test
+
+```{r include=FALSE}
+## Balance test
+T_group = matrix(0, nrow = 0, ncol = 23);
+C_group = matrix(0, nrow = 0, ncol = 23);
+
+for (i in 1:247)
+{
+  if (data[i, 1] == 1)
+  {
+    T_group <- rbind(T_group, data[i, ]);
+  }
+  else
+  {
+    C_group <- rbind(C_group, data[i, ]);
+  }
+}
+  
+
+Test = rep(0, length = ncol(T_group)-1);
+for (i in 1:(ncol(T_group)-1))
+{
+  numerator = nrow(T_group)*(colMeans(T_group[, i+1]) - colMeans(data[, i+1]))^2 + nrow(C_group)*(colMeans(C_group[, i+1]) - colMeans(data[, i+1]))^2;
+  denominator = (var(T_group[, i+1])*(nrow(T_group)-1) + var(C_group[, i+1])*(nrow(C_group)-1))/(nrow(data) - 2);
+  Test[i] = numerator/denominator;
+}
+  
+print_matrix = matrix(0, nrow = 14, ncol = 2)
+print_matrix[1, 1] = 'Gender';
+print_matrix[2, 1] = 'Age';
+print_matrix[3, 1] = 'Schooling';
+print_matrix[4, 1] = 'Job';
+print_matrix[5, 1] = 'City';
+print_matrix[6, 1] = 'Siblings';
+print_matrix[7, 1] = 'Financial Status';
+print_matrix[8, 1] = 'House';
+print_matrix[9, 1] = 'Vehicles';
+print_matrix[10, 1] = 'Share costs';
+print_matrix[11, 1] = 'Financial knowledge';
+print_matrix[12, 1] = 'Interest in finance';
+print_matrix[13, 1] = 'Parsimony';
+print_matrix[14, 1] = 'Financial market';
+
+for (i in 1:14)
+{
+  print_matrix[i, 2] = Test[i];
+}
+```
+
+<center>
+
+```{r echo=FALSE}
+kable(print_matrix, col.names = c('Parameter', 'F-value'))
+```
+
+</center>
+
+For the balance test we made an F-test: the ratio between the within
+variance (variance for treatment and control group) and the between
+variance (overall variance). As we can see from the results for all
+controls the balance test is positive, i.e. the value of the test is
+lower the F-value at 95% (3.85) except for the number of houses. This
+means that people from the treatment group have more houses, on average,
+and this could suggest that they are wealthier.
+
+## Methodology
+
+We estimated five regression models with different specifications:we
+divided our controls in three groups and added sequentially to our first
+simplest model. The first class of controls (reg2) contains
+predetermined variables: Gender, Age, Schooling, Job and City.
+The second class of controls (reg3) contains variables concerning the
+financial wealth and expenses: Financial.status, House*[^1], Vehicles,
+Share.costs. The third class of controls (reg4) contains variables
+concerning financial knowledge and parsimony: Financial.Knowledge,
+Interested.in.Finance, Parsimony, Financial.Markets. In our last
+regression (reg5) we included the interaction terms between the
+treatment and the different levels of parsimony. The estimation is done
+via OLS. We used robust standard errors for our tests.
+
+[^1]: House* = House/Siblings
+
+1.  Model reg1:
+
+$$Distance = \beta_0 + \beta_1 \text{Treatment} + \epsilon$$
+
+2.  Model reg2:
+
+$$Distance = \beta_0 + \beta_1 \text{Treatment} + \beta_2 \text{Gender} + \beta_3 \text{Age} + \beta_4 \text{Schooling} + \beta_5 \text{Job} + \beta_6 \text{City} + \epsilon$$
+
+3.  Model reg3:
+    $$Distance = \beta_0 + \beta_1 \text{Treatment} + \beta_2 \text{Gender} + \beta_3 \text{Age} + \beta_4 \text{Schooling} + \beta_5 \text{Job} + \beta_6 \text{City} +$$
+    $$+ \beta_7 \text{Financial.status} + \beta_8 \text{House*} + \beta_{9} \text{Vehicles} + \beta_{10} \text{Share.costs} + \epsilon$$
+
+\newpage
+4.  Model reg4:
+
+$$Distance = \beta_0 + \beta_1 \text{Treatment} + \beta_2 \text{Gender} + \beta_3 \text{Age} + \beta_4 \text{Schooling} + \beta_5 \text{Job} + \beta_6 \text{City} +$$
+$$+ \beta_7 \text{Financial.status} + \beta_8 \text{House*} + \beta_{9} \text{Vehicles} + \beta_{10} \text{Share.costs} + \beta_{11} \text{Financial.Knowledge} +$$
+$$+ \beta_{12} \text{Interested.in.Finance} + \beta_{13} \text{Parsimony} + \beta_{14} \text{Financial.Markets} + \epsilon$$
+
+5.  Model reg5:
+
+$$Distance = \beta_0 + \beta_1 \text{Treatment} + \beta_2 \text{Gender} + \beta_3 \text{Age} + \beta_4 \text{Schooling} + \beta_5 \text{Job} + \beta_6 \text{City} +$$
+$$ + \beta_7 \text{Financial.status} + \beta_8 \text{House*} + \beta_{9} \text{Vehicles} + \beta_{10} \text{Share.costs} + \beta_{11} \text{Financial.Knowledge} +$$
+$$+ \beta_{12} \text{Interested.in.Finance} + \sum_{i=1}^{4}{\gamma_i \text{Treatment} \times \text{Parsimony}_{i}} + \beta_{13} \text{Financial.Markets} + \sum_{i=1}^{4}{\alpha_i \text{Parsimony}_{i}} + \epsilon$$
+
+```{r include=FALSE}
+reg1 = lm(Distance ~ Treatment, data = data)
+
+reg2 = lm(Distance ~ Treatment + Gender + Age + Schooling + Job + City, data = data)
+
+reg3 = lm(Distance ~ Treatment + Gender + Age + Schooling + Job + City + Financial.status + House/Siblings + Veichles + Share.costs, data = data )
+
+reg4 = lm(Distance ~ Treatment + Gender + Age + Schooling + Job + City + Financial.status + House/Siblings + Veichles + Share.costs + Financial.Knowledge + Interested.in.Finance + Parsimony + Financial.Markets , data = data )
+
+reg5 = lm(Distance ~ Treatment + Gender + Age + Schooling + Job + City + Financial.status + House/Siblings + Veichles + Share.costs + Financial.Knowledge + Interested.in.Finance + Treatment*Parsimony_1 + Treatment*Parsimony_2 + Treatment*Parsimony_3 + Treatment*Parsimony_4 + Treatment*Parsimony_5 + Financial.Markets , data = data)
+
+r1 = coeftest(reg1, vcov.  = vcovHC)
+r2 = coeftest(reg2, vcov.  = vcovHC)
+r3 = coeftest(reg3, vcov.  = vcovHC)
+r4 = coeftest(reg4, vcov.  = vcovHC)
+r5 = coeftest(reg5, vcov.  = vcovHC)
+```
+
+<br><br>
+
+## Results
+
+<center>
+
+```{r echo=FALSE}
+stargazer(r1, r2, r3, r4, r5,
+          header=FALSE, title="",
+          keep.stat="n",digits=4, 
+          single.row=FALSE,
+          intercept.bottom=FALSE,
+          model.names=FALSE,
+          column.labels=c("reg1","reg2","reg3","reg4","reg5"),
+          type = "text"
+          )
+```
+
+</center>
+
+The coefficient of interest is $\beta_1$ since it represents the effect
+of the treatment on the saving rate. We can identify it as a causal
+effect since the treatment is randomly assigned. The estimated effect is
+negative and significant in the first four specifications and in particular
+the treatment decreases the distance of around 10%. Moreover, the effect
+is stable when we insert the controls (it is a robustness check of the
+random treatment).
+
+In the last regression the coefficient of interest $\beta_1$ is lower
+than the other cases. It indicates that, for the omitted category of
+parsimony, the effect is lower in absolute value than the average effect
+estimated in the previous regressions. The causal effect is still
+negative and significant. This result can be explained as the most
+parsimonious individuals are prone to save much more than 12.5% and thus
+they are less affected by the treatment. On the other hand we can't say
+anything about the interactions coefficients because they are
+statistically not significant.
+
+## Discussion
+Our results could be affected by different kind of biases. The most relevant ones that could have had a greater impact on our estimates are:
+
+\begin{itemize}
+\item Sampling Bias: the participants selected for the survey are not be representative of the target population. 
+
+\item Nonresponse Bias: it's possible that those who chose to respond differ significantly from those who did not. This can lead to biased results. For example, it may be that only who is interested in finance and pension related issues completed our form.
+
+\item Social Desirability Bias: respondents may provide answers they believe are more socially acceptable or favorable rather than being truthful. In our case we hope to have minimized it by using an anonymous form.
+
+\item Measurement Error: the data collected may not accurately reflect the true values of variables due to inaccuracies in the questionnaire responses given by partecipants. An issue can be the following: we asked for the desirable saving rate, because we expected an high number of students in our sample and usually students do not save; but the desirable rate can differ dramatically from the actual saving rate, when individuals manage real money. 
+
+\item Omitted Variable Bias: omitted variables might be correlated with both the dependent variable and one or more of the included independent variables. By random assignment of the treatment we believe to have minimized this kind of bias.
+
+\end{itemize}
+
+Our project probably suffer of external validity: as showed in the descriptive statistics of the data, our sample is not representative of a population of savers. In particular all the individuals of our sample are Italian, specifically of Northern Italy and the age distribution is different from the world (and also Italian) population: it has a pick around 20 years and another smaller pick between 50 and 60. Moreover, the results could depends on the characteristic of the citizens of the country considered. 
+```{r echo=FALSE}
+hist(Age, probability = T, nclass = 100)
+```
+
+## Conclusions
+Our experiment leads to the conclusion that it is indeed possible to influence people's saving habits. We identified that the implemented nudges, can affect the ideal saving rate of individuals. In particular we found that the saving rate of treated was 10% lower than those not treated. We believe our result is conditional to the chosen nudge of 12.5%. As discussed before, higher or lower suggested rate can induce to different results. Moreover, 12.5% is arbitrary but policymakers can substitute it with the optimal saving rate.
+
+In conclusion nudges can be considered as important tools for the policy makers. They can help to solve temporary the lack of knowledge of individuals and at the same time help them to make better choices.
+In our case the suggestion was constant across all individuals but it can be set according to the personal information and the situation of each person. 
+
+It is left open to further studies:
+- The analysis of the effect of a treatment higher than 12.5%.
+- The study of specific suggestions for particular categories of individuals.
