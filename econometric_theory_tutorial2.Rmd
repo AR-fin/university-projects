@@ -1,0 +1,413 @@
+---
+title: "Tutorial 2 - Econometric Theory I"
+author: "Alessandro Ricchiuti"
+date: "2023-10-15"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+library(dplyr)
+library(MASS)
+library(lmtest)
+library(sandwich)
+df <- read.csv("tracking.csv", header=T, sep=",", na.strings = "")
+
+```
+
+1.1 Estimation of tracking on student's test scores, assuming as unit of observation the schools:
+```{r message=FALSE, warning=FALSE}
+df1 = df %>% group_by(schoolid, tracking)  #grouping by school and tracking
+df1 = df1 %>% summarise(score=mean(scoreendfirstgrade)) #grouping by school:the variable "score" includes the mean of the score for students in each school
+
+```
+
+Construction of the estimator
+```{r}
+m1 = mean(df1$score[df1$tracking == 1]) #mean of score for schools with tracking
+m0 = mean(df1$score[df1$tracking == 0]) #mean of score for school without tracking
+
+ATEn = m1 - m0 #estimator for tracking, computed as difference among the mean when tracked and when not tracked
+ATEn 
+
+v1 = var(df1$score[df1$tracking == 1])/sum(df1$tracking) #computing S(y1)/n1
+v0 = var(df1$score[df1$tracking == 0])/(nrow(df1)-sum(df1$tracking)) #computing S(y0)/(n-n1)
+
+v_UB = v1 + v0 #computing the upper bound of the variance 
+
+ATEn/sqrt(v_UB) #t statistics
+
+t.test(df1$score ~ df1$tracking, conf.level = 0.1) #using the t test function to have the critical value of t
+
+
+```
+The ATEn is 0.134, suggesting a positive impact of the tracking.
+
+To understand the quality of the estimator we make a t test. The t statistics is 1.67. We can't reject the null hypothesis.
+
+1.2 10% level randomization inference test:
+```{r}
+vector = rep(0, 100000) #creating a vector of 100000 zeros (in the lecture notes is 1000, but we saw that by setting the number of combinations to 1000 the result of the test oscillates between rejection and non-rejection the null hypothesis).
+data_shuffle = df1 #creating a copy of the database
+
+for(i in 1:length(vector)){
+  
+  newtrack = sample(df1$tracking) #reordering the 0s and the 1s
+  data_shuffle$tracking = newtrack #substituting the variable tracking with the variable newtrack
+  randomized_ATE = mean(data_shuffle$score[data_shuffle$tracking==1]) - mean(data_shuffle$score[data_shuffle$tracking==0])#creating the ATE in the randomization test framework
+  
+  vector[i] = randomized_ATE
+  
+}
+
+p_value = length(vector[abs(vector)>=ATEn])/length(vector)
+p_value
+
+sorted_vector = sort(vector)
+q0_05 = unname(quantile(sorted_vector,probs = 0.05)) #finding the forst critical value
+q0_95 = unname(quantile(sorted_vector,probs = 0.95)) #finding the second crtical value
+ifelse((ATEn>abs(q0_05)|ATEn>abs(q0_95)),"reject h0","do not reject h0")
+```
+We do not reject the H0:y1=y0 with the level of the test at 10%. The result is coherent with the result of the t-test.
+
+1.3
+```{r}
+
+df2 = df %>% group_by(tracking, bottomhalf) 
+df3 = df2 %>% summarise(score=mean(scoreendfirstgrade))
+
+ATE_bottom = df3$score[df3$tracking == 1 & df3$bottomhalf == 1] - df3$score[df3$tracking == 0 & df3$bottomhalf == 1] #creating the ATE as difference between the bottom half in tracked schools and the bottom half in not tracked schools
+ATE_upper = df3$score[df3$tracking == 1 & df3$bottomhalf == 0] - df3$score[df3$tracking == 0 & df3$bottomhalf == 0] #creating the ATE as difference between the scores of best students in tracked schools and scores of best students in not tracked schools
+
+df4 = df %>% group_by(tracking, schoolid ,bottomhalf)
+df4 = df4 %>% summarise(score = mean(scoreendfirstgrade)) 
+
+var_ATE_bottom_track = var(df4$score[df4$tracking == 1 & df4$bottomhalf==1])/(sum(df4$tracking)/2) #computing S(y1)/n1
+var_ATE_bottom_notrack = var(df4$score[df4$tracking == 0 & df4$bottomhalf==1])/(108-(sum(df4$tracking)/2)) #computing S(y0)/(n-n1)
+
+var_ATE_upper_track = var(df4$score[df4$tracking == 1 & df4$bottomhalf==0])/(sum(df4$tracking)/2) #computing S(y1)/n1
+var_ATE_upper_notrack = var(df4$score[df4$tracking == 0 & df4$bottomhalf==0])/(108-(sum(df4$tracking)/2)) #computing S(y0)/(n-n1)
+
+v_upper = var_ATE_upper_track + var_ATE_upper_notrack #computing the upper bound of the variance for ATE_upper
+v_bottom = var_ATE_bottom_track + var_ATE_bottom_notrack #computing the upper bound of the variance for ATE_bottom
+
+t_u = ATE_upper/sqrt(v_upper) #t statistics for ATE_upper
+t_b = ATE_bottom/sqrt(v_bottom) #t statistics for ATE_bottom
+
+
+t.test(df4$score[df4$bottomhalf==0] ~ df4$tracking[df4$bottomhalf==0], conf.level = 0.1) 
+t.test(df4$score[df4$bottomhalf==1] ~ df4$tracking[df4$bottomhalf==1], conf.level = 0.1)
+
+```
+By looking at ATE_bottom, we have a positive value: we can expect that, thanks to tracking, the score of students in the bottom half improves.
+By looking at ATE_upper, we have a positive value: we can expect that, thanks to tracking, the score of students in the upper half improves.
+The overall impact of tracking is positive: it seems the treatment benefits every student.
+
+t_u is greater than the critical value => we reject H0: ATE_upper=0
+
+
+t_b is greater than the critical value => we do not reject H0: ATE_bottom=0
+
+
+
+2.1
+
+Proof of the theorem:
+F is strictly increasing, therefore invertible.
+U is a uniform distribution on [0,1] --> F(p)=P(U<p)=p
+Y is defined as F^(-1)(U) and its cdf is F(y)=P(Y<y)=P(F^(-1)(U)<y)= P(U<F(y))=F(y) for every y∈Y
+Therefore the cdf of F^(-1)(U)=F
+
+2.2 Creating the random variables requested
+```{r}
+#2)
+n = 1000 #setting the number of observation
+u = rnorm(n, mean = 0, sd = 1) 
+y0 = u #creating y0 by a standard normal distribution
+v = rnorm(n, mean = 0, sd = 1) 
+y1 = 0.5*y0 +0.5*v + 0.2 #creating y1 as linear combination of stardard normal distributions
+
+dt = data.frame(y0, y1) #dataframe containing y0 and y1
+```
+2.3 The effect is heterogeneous across units since in y1 is included the V random variable, therefore there is a random component in addition to the part related to y0
+
+2.4 Computing ATE1000
+```{r}
+ATE1000 = mean(y1) - mean(y0) #computing the ATE1000
+ATE1000
+```
+
+2.5 Correlation and variance 
+```{r}
+cor(y0, y1)
+var(y1-y0)*(n-1)/n #variance for the population. The command var has been corrected since it is the sample variance by default
+
+```
+
+6. 800 iterations loop
+```{r}
+L = 800 #number of repetitions of the loop
+
+k = c()
+l = c()
+m = c()
+
+for (j in 1:L) {
+  
+  x = runif(n, min = 0, max = 1)  #Create a variable containing a random number.
+  dt1 = cbind(dt, x) #Attaching x at the previous dataframe
+  dt1 = arrange(dt1, x) #Sorting the 1000 observations according to that random number.
+  
+  D = c(rep(1, 500), rep(0,500)) #Creating a vector of 500 ones and 500 zeros
+  dt1 = cbind(dt1, D) #Attaching D to the dataframe
+  #in this way we create a dummy equal to 1 for the first 500 observations and 0 for the remaining ones
+  
+  Y = (1-dt1$D)*dt1$y0 + dt1$D*dt1$y1 #Creating the variable Y = (1 -D)y(0) + Dy(1).
+  dt1 = cbind(dt1, Y)
+  
+  OLS = lm(Y ~ D, dt1) #Regressing Y on D, using the robust option 
+  ATE1000E = mean(dt1$y1[dt1$D == 1]) - mean(dt1$y0[dt1$D == 0])#finding the estimation for ATE1000
+  ATE1000E
+  coeftest(OLS, vcov. = vcovHC) #Checking the beta of D is the same of ATE1000E
+  
+  S0 = (1/499)*sum((dt1$y0[dt1$D == 0] - mean(dt1$y0[dt1$D == 0]))^2) #computing S(y0)/(n-n1) 
+  S1 = (1/499)*sum((dt1$y1[dt1$D == 1] - mean(dt1$y1[dt1$D == 1]))^2) #computing S(y1)/n1
+  VAR_ATE1000E_UB = (1/500)*(S0) + (1/500)*(S1) #Computing the upper bound for the variance 
+  sqrt(VAR_ATE1000E_UB) #checking the sd found is the same of the sd in the OLS command
+  
+  IC = c(ATE1000E - 1.96*sqrt(VAR_ATE1000E_UB), ATE1000E + 1.96*sqrt(VAR_ATE1000E_UB)) ##Compute IC(0.05)+
+  
+  Indi <- ifelse((ATE1000 > ATE1000E - 1.96*sqrt(VAR_ATE1000E_UB) & ATE1000 < ATE1000E + 1.96*sqrt(VAR_ATE1000E_UB)), 1, 0) #Computeing the indicator 1{ATE1000 ∈ IC(0.05)+}.
+  
+ #Storing ATE1000E, VAR_ATE1000E_UB, and 1{ATE1000 ∈ IC(0.05)+} in a matrix
+  k[j] = ATE1000E
+  l[j] = VAR_ATE1000E_UB
+  m[j] = Indi
+  
+}
+t = cbind(k, l, m) #matrix of ATE1000E, VAR_ATE1000E_UB, and 1{ATE1000 ∈ IC(0.05)+}
+
+#Computing the mean of ATE1000E over those 800 replications, and compare it to ATE1000.
+mean(k)
+ATE1000
+
+#Computing the variance of ATE1000E over those 800 replications, and compare it to the mean of VAR_ATE1000E_UB
+var(k) #variance of the estimator
+mean(l) #mean of the upper bounds of the variance
+
+#Computing the mean of 1{ATE1000 ∈ IC(0.05)+}.
+mean(m)
+```
+As expected, thanks to the WLLN, and our large number of observations, we see that the mean of the estimated values of ATE1000 and the real value of ATE1000 are close.
+
+When we compare the variance of the estimator with the mean of the upper bounds, the result is consistent with the theory since the upper bound is always greater or equal to the real value of the variance of the estimator.
+
+As regards the confidence interval with alfa = 0.05, we should expect that in the 95% of the cases we obtain the real value belonging to the interval. Here we constructed the IC with the upper bound of the variance, therefore the confidence of obtaining the value belonging into the interval is higher.
+
+
+2.7
+```{r}
+L = 800 #number of repetitions of the loop
+
+k = c()
+l = c()
+m = c()
+
+#800 iterations loop
+for (j in 1:L) {
+  
+  #1. Create a variable y(0) = U, where U follows a N(0, 1) distribution, and create a variable y(1) = 0.5y(0) + 0.5V + 0.2, where V is a N(0, 1) random variable independent of U with 1000 observations each.
+  n = 1000 #number of observations
+  u = rnorm(n, mean = 0, sd = 1)
+  y0 = u #creating a variable y(0) = u, where u follows a N(0, 1) distribution
+  
+  v = rnorm(n, mean = 0, sd = 1)
+  y1 = 0.5*y0 +0.5*v + 0.2 #creating a variable y(1) = 0.5y(0) + 0.5V + 0.2 with v standard normal 
+ 
+  dt = data.frame(y0, y1) #creating a dataframe with the two variables
+  
+  x = runif(n, min = 0, max = 1)   #Creating a variable containing a random number.
+  dt1 = cbind(dt, x) #Attaching x at the previous dataframe
+  dt1 = arrange(dt1, x) #Sorting the 1000 observations according to that random number.
+  
+  D = c(rep(1, 500), rep(0,500)) #Creating a dummy variable D equal to 1 for the first 500 observations, 0 elsewhere
+  dt1 = cbind(dt1, D) #Attaching D at the previous dataframe
+  
+  Y = (1-dt1$D)*dt1$y0 + dt1$D*dt1$y1 #Creating the variable Y = (1 - D)y(0) + Dy(1)
+  dt1 = cbind(dt1, Y) #Attaching Y to the previous dataframe
+  
+  
+  ATE1000E = mean(dt1$y1[dt1$D == 1]) - mean(dt1$y0[dt1$D == 0]) #computing ATE1000E
+  
+  S0 = (1/499)*sum((dt1$y0[dt1$D == 0] - mean(dt1$y0[dt1$D == 0]))^2) #computing S(y0)/(n-n1)
+  S1 = (1/499)*sum((dt1$y1[dt1$D == 1] - mean(dt1$y1[dt1$D == 1]))^2) #computing S(y1)/n1
+  
+  VAR_ATE1000E_UB = (1/500)*(S0) + (1/500)*(S1) #computing the upper bound of the variance of the estimator
+  
+  
+  IC = c(ATE1000E - 1.96*sqrt(VAR_ATE1000E_UB), ATE1000E + 1.96*sqrt(VAR_ATE1000E_UB)) #Computing IC(0.05)+ 
+  
+  #computing the indicator 1{0.2 ∈ IC(0.05)+}
+  z = 0.2
+  Indi <- ifelse((z > ATE1000E - 1.96*sqrt(VAR_ATE1000E_UB) & z < ATE1000E + 1.96*sqrt(VAR_ATE1000E_UB)), 1, 0)
+  
+ 
+  k[j] = ATE1000E
+  l[j] = VAR_ATE1000E_UB
+  m[j] = Indi
+
+}
+
+t = cbind(k, l, m) #Storing ATE1000E, VAR_ATE1000E_UB and 1{0.2 ∈ IC(0.05)+} in a matrix/dataframe.
+
+#computing the mean of ATE1000E and comparing it to 0.2
+mean(k)
+0.2
+
+#computing the variance of ATE1000E and comparing to the mean of VAR_ATE1000E_UB
+var(k)
+mean(l)
+
+#computing the mean of 1{ATE1000 ∈ IC(0.05)+}.
+mean(m)
+
+
+
+```
+0.2 is the ATE, since it is the difference between the expected values of y1 and the expected value of y0. The mean of the estimated ATEs is greater than 0.2. Since the WLLN works for n that tends to infinity, by increasing n the value becomes closer to 0.2.
+
+The mean of the upper bound of the variance is greater than the variance of the estimator, as we expected.
+
+The confidence of the interval, computed by the indicator function including the upper bound of the variance, is higher than 0.95. The result is consistent with the theory.
+
+The main difference between ex. 7 and ex. 6 is in the value we use to construct the confidence interval and the indicator function. In ex 6. we use ATE1000 that is an estimated value, in ex. 7 we use 0.2 that is the ATE. 
+
+2.8
+```{r}
+L = 800 #number of repetitions of the loop
+n = 1000 # setting the number of observation
+k = c()
+l = c()
+m = c()
+
+for (j in 1:L) {
+  
+  u = rnorm(n, mean = 0, sd = 1)
+  y0 = u #creating y0 standard normal distribution
+  y1 = y0 + 0.1771 #creating y1
+  
+  x = runif(n, min = 0, max = 1) #Create a variable containing a random number.
+  dt1 = cbind(dt, x) #Attaching x at the previous dataframe
+  dt1 = arrange(dt1, x) #Sorting the 1000 observations according to that random number.
+
+  D = c(rep(1, 500), rep(0,500))  #Creating a vector of 500 ones and 500 zeros
+  dt1 = cbind(dt1, D) #Attaching D to the dataframe
+  #in this way we create a dummy equal to 1 for the first 500 observations and 0 for the remaining ones
+
+  Y = (1-dt1$D)*dt1$y0 + dt1$D*dt1$y1 #Creating the variable Y = (1 - D)y(0) + Dy(1).
+  dt1 = cbind(dt1, Y)
+  
+  ATE1000E = mean(dt1$y1[dt1$D == 1]) - mean(dt1$y0[dt1$D == 0]) #computing the estimate ATE1000
+  
+  S0 = (1/499)*sum((dt1$y0[dt1$D == 0] - mean(dt1$y0[dt1$D == 0]))^2) ##computing S(y0)/(n-n1)
+  S1 = (1/499)*sum((dt1$y1[dt1$D == 1] - mean(dt1$y1[dt1$D == 1]))^2) #computing S(y1)/n1
+  
+  VAR_ATE1000E_UB = (1/500)*(S0) + (1/500)*(S1) #Computing the upper bound of the variance 
+  
+  Indi <- ifelse(abs(ATE1000E/sqrt(VAR_ATE1000E_UB) > 1.96), 1, 0)
+  
+  k[j] = ATE1000E
+  l[j] = VAR_ATE1000E_UB
+  m[j] = Indi
+  
+  
+}
+
+
+t = cbind(k, l, m)
+
+#Compute the mean of the indicator function
+mean(m)
+```
+Since the indicator function is constructed with the upper bound of the variance, the probability of I type error (p) is at most alfa, therefore (1 - p) is greater than (1 - alfa), as empirically proved.
+
+The 0.1771 is the ATE because it is the expected value of the difference of y1 and y0. 
+
+
+2.9 
+```{r}
+n = 1000
+n1 = 500
+MDD = sqrt(n/((n-n1)*n1))*(qnorm(0.025, lower.tail = F) + qnorm(0.2, lower.tail = F))
+#in the computation of MDD we assume alfa=0.05 and lambda=0.8.
+
+```
+By assuming the variances equal to 1 in order to have standardized outcomes, our MDD is larger than the MDD found in empirical literature,  therefore we do not embark in this experiment.
+
+2.10
+```{r}
+L = 800 #number of repetitions of the loop
+n = 10 # setting the number of observation
+m = c()
+
+for (j in 1:L) {
+  u = rnorm(n, mean = 0, sd = 1)
+  y0 = u #creating y0 standard normal distribution
+  y1 = y0 #creating y1
+  dt = data.frame(y0, y1) 
+  
+  x = runif(n, min = 0, max = 1) #Creating a variable containing a random number.
+  dt1 = cbind(dt, x) #Attaching x at the previous dataframe
+  dt1 = arrange(dt1, x) #Sorting the 10 observations according to that random number.
+
+  D = c(rep(1, 5), rep(0,5)) #Creating a vector of 5 ones and 5 zeros
+  dt1 = cbind(dt1, D) #Attaching D to the dataframe
+  #in this way we create a dummy equal to 1 for the first 5 observations and 0 for the remaining ones
+
+  Y = (1-dt1$D)*dt1$y0 + dt1$D*dt1$y1 #Creating the variable Y = (1 - D)y(0) + Dy(1).
+  dt1 = cbind(dt1, Y)
+  
+  OLS1 = lm(Y ~ D, dt1) #regressing Y on D
+  ATE10 = OLS1$coefficients[2] #storing the coefficient
+  
+  #7. 100 iterations loop
+  vATE10E = c()
+
+  for (i in 1:100){
+    
+    w = runif(n, min = 0, max = 1) #Creating a variable containing a random number.
+    dt2 = cbind(dt, w) #Attaching w at the previous dataframe
+    dt2 = cbind(dt2, Y) #Sorting the 10 observations according to that random number.
+    
+    dt2 = arrange(dt2, w) #Sorting the 10 observations according to that random number.
+    
+    Ds = c(rep(1, 5), rep(0,5)) # Creating a dummy variable Ds equal to 1 for the first 5 observations in the sorted dataset.
+    dt2 = cbind(dt2, Ds) #Attaching w at the previous dataframe
+  
+    OLS2 = lm(dt2$Y ~ Ds, dt2) #Regressing Y on Ds
+    vATE10E[i] = OLS2$coefficients[2] #Storing the coefficient of Ds in that regression.
+    
+  }
+  
+ 
+  q05 = quantile(vATE10E, probs = c(0.05)) #Computing the 5th percentile
+  q95 = quantile(vATE10E, probs = c(0.95)) #Computing the 95th percentile
+  
+  #Computing the indicator 1{[ATEE10 ∈ [q05, q95]}.
+  Indi <- ifelse((ATE10 > quantile(vATE10E, probs = c(0.05)) & ATE10 < quantile(vATE10E, probs = c(0.95))), 1, 0)
+  
+  m[j] = Indi #Storing 1{[ATEE10 ∈ [q05, q95]} in a matrix.
+}
+
+mean(m) #Computing the mean of 1{[ATEE10 ∈ [q05, q95]}
+
+```
+By the second loop we found a kind of distribution of ATEn. Through the indicator function we see if our ATE is between the 0.05 percentile and the 0.95 percentile. The mean of the indicator functions is 0.88, close to 0.9 (the real coverage of a CI with alfa= 0.05)
+
+
+
+
+
+
